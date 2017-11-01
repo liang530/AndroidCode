@@ -2,6 +2,7 @@ package com.blankj.utilcode.util;
 
 import android.os.Environment;
 import android.support.annotation.IntDef;
+import android.support.annotation.IntRange;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -72,12 +73,12 @@ public final class LogUtils {
     private static boolean sLogBorderSwitch   = true;  // log边框开关，默认开
     private static int     sConsoleFilter     = V;     // log控制台过滤器
     private static int     sFileFilter        = V;     // log文件过滤器
-    public static  int     sStackDeep         = 1;     // log栈深度
+    private static int     sStackDeep         = 1;     // log栈深度
 
-    private static final Config CONFIG        = new Config();
     private static final String FILE_SEP      = System.getProperty("file.separator");
     private static final String LINE_SEP      = System.getProperty("line.separator");
     private static final String TOP_BORDER    = "╔═══════════════════════════════════════════════════════════════════════════════════════════════════";
+    private static final String SPLIT_BORDER  = "╟───────────────────────────────────────────────────────────────────────────────────────────────────";
     private static final String LEFT_BORDER   = "║ ";
     private static final String BOTTOM_BORDER = "╚═══════════════════════════════════════════════════════════════════════════════════════════════════";
     private static final int    MAX_LEN       = 4000;
@@ -85,6 +86,7 @@ public final class LogUtils {
     private static final String NULL_TIPS     = "Log with null object.";
     private static final String NULL          = "null";
     private static final String ARGS          = "args";
+    private static final Config CONFIG        = new Config();
 
     private LogUtils() {
         throw new UnsupportedOperationException("u can't instantiate me...");
@@ -98,48 +100,48 @@ public final class LogUtils {
         log(V, sGlobalTag, contents);
     }
 
-    public static void v(final String tag, final Object... contents) {
-        log(V, tag, contents);
+    public static void v(final String tag, final Object content, final Object... contents) {
+        log(V, tag, content, contents);
     }
 
     public static void d(final Object contents) {
         log(D, sGlobalTag, contents);
     }
 
-    public static void d(final String tag, final Object... contents) {
-        log(D, tag, contents);
+    public static void d(final String tag, final Object content, final Object... contents) {
+        log(D, tag, content, contents);
     }
 
     public static void i(final Object contents) {
         log(I, sGlobalTag, contents);
     }
 
-    public static void i(final String tag, final Object... contents) {
-        log(I, tag, contents);
+    public static void i(final String tag, final Object content, final Object... contents) {
+        log(I, tag, content, contents);
     }
 
     public static void w(final Object contents) {
         log(W, sGlobalTag, contents);
     }
 
-    public static void w(final String tag, final Object... contents) {
-        log(W, tag, contents);
+    public static void w(final String tag, final Object content, final Object... contents) {
+        log(W, tag, content, contents);
     }
 
     public static void e(final Object contents) {
         log(E, sGlobalTag, contents);
     }
 
-    public static void e(final String tag, final Object... contents) {
-        log(E, tag, contents);
+    public static void e(final String tag, final Object content, final Object... contents) {
+        log(E, tag, content, contents);
     }
 
     public static void a(final Object contents) {
         log(A, sGlobalTag, contents);
     }
 
-    public static void a(final String tag, final Object... contents) {
-        log(A, tag, contents);
+    public static void a(final String tag, final Object content, final Object... contents) {
+        log(A, tag, content, contents);
     }
 
     public static void file(final Object contents) {
@@ -194,36 +196,72 @@ public final class LogUtils {
         if (!sLogSwitch || (!sLog2ConsoleSwitch && !sLog2FileSwitch)) return;
         int type_low = type & 0x0f, type_high = type & 0xf0;
         if (type_low < sConsoleFilter && type_low < sFileFilter) return;
-        final String[] tagAndHead = processTagAndHead(tag);
+        final TagHead tagHead = processTagAndHead(tag);
         String body = processBody(type_high, contents);
-        if (sLog2ConsoleSwitch && type_low >= sConsoleFilter) {
-            print2Console(type_low, tagAndHead[0], tagAndHead[1] + body);
+        if (sLog2ConsoleSwitch && type_low >= sConsoleFilter && type_high != FILE) {
+            print2Console(type_low, tagHead.tag, tagHead.consoleHead, body);
         }
-        if (sLog2FileSwitch || type_high == FILE) {
-            if (type_low >= sFileFilter) print2File(type_low, tagAndHead[0], tagAndHead[2] + body);
+        if ((sLog2FileSwitch || type_high == FILE) && type_low >= sFileFilter) {
+            print2File(type_low, tagHead.tag, tagHead.fileHead + body);
         }
     }
 
-    private static String[] processTagAndHead(String tag) {
+    private static TagHead processTagAndHead(String tag) {
         if (!sTagIsSpace && !sLogHeadSwitch) {
             tag = sGlobalTag;
         } else {
-            StackTraceElement targetElement = new Throwable().getStackTrace()[3];
+            final StackTraceElement[] stackTrace = new Throwable().getStackTrace();
+            StackTraceElement targetElement = stackTrace[3];
             String fileName = targetElement.getFileName();
-            String className = fileName.substring(0, fileName.indexOf('.'));
+            String className;
+            if (fileName == null) {// 混淆可能会导致获取为空 加-keepattributes SourceFile,LineNumberTable
+                className = targetElement.getClassName();
+                String[] classNameInfo = className.split("\\.");
+                if (classNameInfo.length > 0) {
+                    className = classNameInfo[classNameInfo.length - 1];
+                }
+                int index = className.indexOf('$');
+                if (index != -1) {
+                    className = className.substring(0, index);
+                }
+                fileName = className + ".java";
+            } else {
+                int index = fileName.indexOf('.');// 混淆可能导致文件名被改变从而找不到"."
+                className = index == -1 ? fileName : fileName.substring(0, index);
+            }
             if (sTagIsSpace) tag = isSpace(tag) ? className : tag;
             if (sLogHeadSwitch) {
-                String head = new Formatter()
+                String tName = Thread.currentThread().getName();
+                final String head = new Formatter()
                         .format("%s, %s(%s:%d)",
-                                Thread.currentThread().getName(),
+                                tName,
                                 targetElement.getMethodName(),
                                 fileName,
                                 targetElement.getLineNumber())
                         .toString();
-                return new String[]{tag, head + LINE_SEP, " [" + head + "]: "};
+                final String fileHead = " [" + head + "]: ";
+                if (sStackDeep <= 1) {
+                    return new TagHead(tag, new String[]{head}, fileHead);
+                } else {
+                    final String[] consoleHead = new String[Math.min(sStackDeep, stackTrace.length - 3)];
+                    consoleHead[0] = head;
+                    int spaceLen = tName.length() + 2;
+                    String space = new Formatter().format("%" + spaceLen + "s", "").toString();
+                    for (int i = 1, len = consoleHead.length; i < len; ++i) {
+                        targetElement = stackTrace[i + 3];
+                        consoleHead[i] = new Formatter()
+                                .format("%s%s(%s:%d)",
+                                        space,
+                                        targetElement.getMethodName(),
+                                        targetElement.getFileName(),
+                                        targetElement.getLineNumber())
+                                .toString();
+                    }
+                    return new TagHead(tag, consoleHead, fileHead);
+                }
             }
         }
-        return new String[]{tag, "", ": "};
+        return new TagHead(tag, null, ": ");
     }
 
     private static String processBody(final int type, final Object... contents) {
@@ -283,42 +321,55 @@ public final class LogUtils {
         return xml;
     }
 
-    private static void print2Console(final int type, final String tag, String msg) {
+    private static void print2Console(final int type, final String tag, final String[] head, String msg) {
+        printBorder(type, tag, true);
+        printHead(type, tag, head);
+        printMsg(type, tag, msg);
+        printBorder(type, tag, false);
+    }
+
+    private static void printBorder(final int type, final String tag, boolean isTop) {
         if (sLogBorderSwitch) {
-            print(type, tag, TOP_BORDER);
-            msg = addLeftBorder(msg);
+            Log.println(type, tag, isTop ? TOP_BORDER : BOTTOM_BORDER);
         }
+    }
+
+    private static void printHead(final int type, final String tag, final String[] head) {
+        if (head != null) {
+            for (String aHead : head) {
+                Log.println(type, tag, sLogBorderSwitch ? LEFT_BORDER + aHead : aHead);
+            }
+            if (sLogBorderSwitch) Log.println(type, tag, SPLIT_BORDER);
+        }
+    }
+
+    private static void printMsg(final int type, final String tag, final String msg) {
         int len = msg.length();
         int countOfSub = len / MAX_LEN;
         if (countOfSub > 0) {
-            print(type, tag, msg.substring(0, MAX_LEN));
-            String sub;
-            int index = MAX_LEN;
-            for (int i = 1; i < countOfSub; i++) {
-                sub = msg.substring(index, index + MAX_LEN);
-                print(type, tag, sLogBorderSwitch ? LEFT_BORDER + sub : sub);
+            int index = 0;
+            for (int i = 0; i < countOfSub; i++) {
+                printSubMsg(type, tag, msg.substring(index, index + MAX_LEN));
                 index += MAX_LEN;
             }
-            sub = msg.substring(index, len);
-            print(type, tag, sLogBorderSwitch ? LEFT_BORDER + sub : sub);
+            if (index != len) {
+                printSubMsg(type, tag, msg.substring(index, len));
+            }
         } else {
-            print(type, tag, msg);
+            printSubMsg(type, tag, msg);
         }
-        if (sLogBorderSwitch) print(type, tag, BOTTOM_BORDER);
     }
 
-    private static void print(final int type, final String tag, final String msg) {
-        Log.println(type, tag, msg);
-    }
-
-    private static String addLeftBorder(final String msg) {
-        if (!sLogBorderSwitch) return msg;
+    private static void printSubMsg(final int type, final String tag, final String msg) {
+        if (!sLogBorderSwitch) {
+            Log.println(type, tag, msg);
+            return;
+        }
         StringBuilder sb = new StringBuilder();
         String[] lines = msg.split(LINE_SEP);
         for (String line : lines) {
-            sb.append(LEFT_BORDER).append(line).append(LINE_SEP);
+            Log.println(type, tag, LEFT_BORDER + line);
         }
-        return sb.toString();
     }
 
     private static void print2File(final int type, final String tag, final String msg) {
@@ -472,6 +523,11 @@ public final class LogUtils {
             return this;
         }
 
+        public Config setStackDeep(@IntRange(from = 1) final int stackDeep) {
+            sStackDeep = stackDeep;
+            return this;
+        }
+
         @Override
         public String toString() {
             return "switch: " + sLogSwitch
@@ -483,7 +539,20 @@ public final class LogUtils {
                     + LINE_SEP + "filePrefix" + sFilePrefix
                     + LINE_SEP + "border: " + sLogBorderSwitch
                     + LINE_SEP + "consoleFilter: " + T[sConsoleFilter - V]
-                    + LINE_SEP + "fileFilter: " + T[sFileFilter - V];
+                    + LINE_SEP + "fileFilter: " + T[sFileFilter - V]
+                    + LINE_SEP + "stackDeep: " + sStackDeep;
+        }
+    }
+
+    private static class TagHead {
+        String   tag;
+        String[] consoleHead;
+        String   fileHead;
+
+        TagHead(String tag, String[] consoleHead, String fileHead) {
+            this.tag = tag;
+            this.consoleHead = consoleHead;
+            this.fileHead = fileHead;
         }
     }
 }
