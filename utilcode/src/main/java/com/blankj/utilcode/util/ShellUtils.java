@@ -10,81 +10,91 @@ import java.util.List;
  *     author: Blankj
  *     blog  : http://blankj.com
  *     time  : 2016/08/07
- *     desc  : Shell相关工具类
+ *     desc  : utils about shell
  * </pre>
  */
 public final class ShellUtils {
+
+    private static final String LINE_SEP = System.getProperty("line.separator");
 
     private ShellUtils() {
         throw new UnsupportedOperationException("u can't instantiate me...");
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param command 命令
-     * @param isRoot  是否需要root权限执行
-     * @return CommandResult
+     * @param command The command.
+     * @param isRoot  True to use root, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
     public static CommandResult execCmd(final String command, final boolean isRoot) {
         return execCmd(new String[]{command}, isRoot, true);
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param commands 多条命令链表
-     * @param isRoot   是否需要root权限执行
-     * @return CommandResult
+     * @param commands The commands.
+     * @param isRoot   True to use root, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
     public static CommandResult execCmd(final List<String> commands, final boolean isRoot) {
         return execCmd(commands == null ? null : commands.toArray(new String[]{}), isRoot, true);
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param commands 多条命令数组
-     * @param isRoot   是否需要root权限执行
-     * @return CommandResult
+     * @param commands The commands.
+     * @param isRoot   True to use root, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
     public static CommandResult execCmd(final String[] commands, final boolean isRoot) {
         return execCmd(commands, isRoot, true);
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param command         命令
-     * @param isRoot          是否需要root权限执行
-     * @param isNeedResultMsg 是否需要结果消息
-     * @return CommandResult
+     * @param command         The command.
+     * @param isRoot          True to use root, false otherwise.
+     * @param isNeedResultMsg True to return the message of result, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
-    public static CommandResult execCmd(final String command, final boolean isRoot, final boolean isNeedResultMsg) {
+    public static CommandResult execCmd(final String command,
+                                        final boolean isRoot,
+                                        final boolean isNeedResultMsg) {
         return execCmd(new String[]{command}, isRoot, isNeedResultMsg);
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param commands        命令链表
-     * @param isRoot          是否需要root权限执行
-     * @param isNeedResultMsg 是否需要结果消息
-     * @return CommandResult
+     * @param commands        The commands.
+     * @param isRoot          True to use root, false otherwise.
+     * @param isNeedResultMsg True to return the message of result, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
-    public static CommandResult execCmd(final List<String> commands, final boolean isRoot, final boolean isNeedResultMsg) {
-        return execCmd(commands == null ? null : commands.toArray(new String[]{}), isRoot, isNeedResultMsg);
+    public static CommandResult execCmd(final List<String> commands,
+                                        final boolean isRoot,
+                                        final boolean isNeedResultMsg) {
+        return execCmd(commands == null ? null : commands.toArray(new String[]{}),
+                isRoot,
+                isNeedResultMsg);
     }
 
     /**
-     * 是否是在root下执行命令
+     * Execute the command.
      *
-     * @param commands        命令数组
-     * @param isRoot          是否需要root权限执行
-     * @param isNeedResultMsg 是否需要结果消息
-     * @return CommandResult
+     * @param commands        The commands.
+     * @param isRoot          True to use root, false otherwise.
+     * @param isNeedResultMsg True to return the message of result, false otherwise.
+     * @return the single {@link CommandResult} instance
      */
-    public static CommandResult execCmd(final String[] commands, final boolean isRoot, final boolean isNeedResultMsg) {
+    public static CommandResult execCmd(final String[] commands,
+                                        final boolean isRoot,
+                                        final boolean isNeedResultMsg) {
         int result = -1;
         if (commands == null || commands.length == 0) {
             return new CommandResult(result, null, null);
@@ -101,25 +111,31 @@ public final class ShellUtils {
             for (String command : commands) {
                 if (command == null) continue;
                 os.write(command.getBytes());
-                os.writeBytes("\n");
+                os.writeBytes(LINE_SEP);
                 os.flush();
             }
-            os.writeBytes("exit\n");
+            os.writeBytes("exit" + LINE_SEP);
             os.flush();
             result = process.waitFor();
             if (isNeedResultMsg) {
                 successMsg = new StringBuilder();
                 errorMsg = new StringBuilder();
-                successResult = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
-                errorResult = new BufferedReader(new InputStreamReader(process.getErrorStream(), "UTF-8"));
-                String s;
-                while ((s = successResult.readLine()) != null) {
-                    successMsg.append(System.getProperty("line.separator"));
-                    successMsg.append(System.getProperty("line.separator"));
+                successResult = new BufferedReader(new InputStreamReader(process.getInputStream(),
+                        "UTF-8"));
+                errorResult = new BufferedReader(new InputStreamReader(process.getErrorStream(),
+                        "UTF-8"));
+                String line;
+                if ((line = successResult.readLine()) != null) {
+                    successMsg.append(line);
+                    while ((line = successResult.readLine()) != null) {
+                        successMsg.append(LINE_SEP).append(line);
+                    }
                 }
-                while ((s = errorResult.readLine()) != null) {
-                    errorMsg.append("\n");
-                    errorMsg.append(s);
+                if ((line = errorResult.readLine()) != null) {
+                    errorMsg.append(line);
+                    while ((line = errorResult.readLine()) != null) {
+                        errorMsg.append(LINE_SEP).append(line);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -138,20 +154,11 @@ public final class ShellUtils {
     }
 
     /**
-     * 返回的命令结果
+     * The result of command.
      */
     public static class CommandResult {
-        /**
-         * 结果码
-         **/
         public int    result;
-        /**
-         * 成功信息
-         **/
         public String successMsg;
-        /**
-         * 错误信息
-         **/
         public String errorMsg;
 
         public CommandResult(final int result, final String successMsg, final String errorMsg) {
